@@ -4,16 +4,6 @@
   <meta charset="UTF-8">
   <title>Seismic Noise Dumping Simulation</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    /* Stili aggiuntivi per il canvas del pendolo, se necessario */
-    #pendulumCanvas {
-      background-color: #f9fafb; /* Un leggero sfondo per il canvas */
-      border: 1px solid #e5e7eb; /* Bordo sottile */
-      display: block; /* Per centrarlo con mx-auto */
-      margin-left: auto;
-      margin-right: auto;
-    }
-  </style>
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans p-6">
   <div class="max-w-5xl mx-auto bg-white shadow-lg rounded-xl p-6 space-y-6">
@@ -84,21 +74,20 @@
       </button>
     </div>
 
-    <!-- Pendulum Visualization -->
-    <div class="bg-gray-50 p-4 rounded-lg shadow-inner">
-      <h3 class="text-xl font-semibold mb-2 text-blue-600">Pendulum Visualization</h3>
-      <canvas id="pendulumCanvas" width="400" height="400"></canvas>
-    </div>
-
     <!-- Chart -->
     <div class="bg-gray-50 p-4 rounded-lg shadow-inner">
-      <h3 class="text-xl font-semibold mb-2 text-blue-600">Simulation Chart</h3>
       <canvas id="chart" width="900" height="400"></canvas>
+    </div>
+
+    <!-- Pendulum Visualization -->
+    <div class="bg-gray-50 p-4 rounded-lg shadow-inner mt-6">
+      <h3 class="text-xl font-semibold mb-2 text-blue-600">Pendulum Visualization</h3>
+      <canvas id="pendulumCanvas" width="400" height="400" class="bg-white border border-gray-300 mx-auto block"></canvas>
     </div>
 
     <!-- Log -->
     <div>
-      <h3 class="text-xl font-semibold mb-2 text-blue-600">Log / Messages</h3>
+      <h3 class="text-xl font-semibold mb-2">Log / Messages</h3>
       <div id="log" class="bg-gray-800 text-green-200 p-3 rounded-lg font-mono text-sm h-48 overflow-y-auto">
         Enter at least one row in the table or load a w.txt file, then press "Run Simulation".
       </div>
