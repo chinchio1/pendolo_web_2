@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Seismic Noise Dumping Simulation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Stili aggiuntivi per il canvas del pendolo, se necessario */
+    #pendulumCanvas {
+      background-color: #f9fafb; /* Un leggero sfondo per il canvas */
+      border: 1px solid #e5e7eb; /* Bordo sottile */
+      display: block; /* Per centrarlo con mx-auto */
+      margin-left: auto;
+      margin-right: auto;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans p-6">
+  <div class="max-w-5xl mx-auto bg-white shadow-lg rounded-xl p-6 space-y-6">
+    <h1 class="text-3xl font-bold text-center text-blue-600">
+      Seismic Noise Dumping Simulation
+    </h1>
+    <p class="text-center text-gray-600 mt-2">
+      A web tool to model seismic noise filters used in ground-based laser interferometers. Users can adjust physical parameters and noise components to simulate how a multistage pendulum can be used to dampen seismic disturbances. The system uses a very simple double pendulum with equal masses and equal lengths. For any questions, email me at chinchiofilippo@gmail.com.
+    </p>
+
+    <!-- Controls -->
+    <div id="controls" class="flex flex-wrap gap-4 items-center justify-center">
+      <input type="file" id="fileInput" accept=".txt"
+             class="block w-60 text-sm text-gray-600 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+      <label class="flex items-center gap-2">
+        <span>Steps (n):</span>
+        <input id="nSteps" type="number" value="100000" min="10000" step="10000"
+               class="w-28 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" />
+      </label>
+
+      <label class="flex items-center gap-2">
+        <span>Gravity g (m/s²):</span>
+        <input id="gInput" type="number" value="9.80513" step="1.0" class="w-28 p-2 border rounded-lg"/>
+      </label>
+
+      <label class="flex items-center gap-2">
+        <span>Time interval Δt (s):</span>
+        <input id="deltatInput" type="number" value="10.0" step="1.0" class="w-28 p-2 border rounded-lg"/>
+      </label>
+
+      <label class="flex items-center gap-2">
+        <span>Pendulum length l (m):</span>
+        <input id="lInput" type="number" value="7.5" step="1.0" class="w-28 p-2 border rounded-lg"/>
+      </label>
+
+      <button id="runBtn"
+              class="bg-blue-500 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-600 transition">
+        Run Simulation
+      </button>
+
+      <button id="downloadBtn" disabled
+              class="bg-green-500 text-white px-4 py-2 rounded-lg shadow hover:bg-green-600 transition disabled:opacity-50">
+        Download Output
+      </button>
+    </div>
+
+    <!-- Interactive Table -->
+    <div class="flex flex-col gap-2">
+      <label class="font-semibold text-blue-600">Enter noise data manually or use a file (if you want to use the file, please remove all data from the table):</label>
+      <small class="text-gray-600">
+        Columns: decay constant (s), frequency (Hz), phase (rad), Amplitude (m)
+      </small>
+      <table id="wTable" class="table-auto border-collapse border border-gray-300 w-full">
+        <thead>
+          <tr class="bg-gray-200">
+            <th class="border border-gray-300 px-2">tau (s)</th>
+            <th class="border border-gray-300 px-2">w (Hz)</th>
+            <th class="border border-gray-300 px-2">phi (rad)</th>
+            <th class="border border-gray-300 px-2">A (m)</th>
+            <th class="border border-gray-300 px-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="wTableBody"></tbody>
+      </table>
+      <button type="button" id="addRowBtn" class="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 mt-2">
+        Add Row
+      </button>
+    </div>
+
+    <!-- Pendulum Visualization -->
+    <div class="bg-gray-50 p-4 rounded-lg shadow-inner">
+      <h3 class="text-xl font-semibold mb-2 text-blue-600">Pendulum Visualization</h3>
+      <canvas id="pendulumCanvas" width="400" height="400"></canvas>
+    </div>
+
+    <!-- Chart -->
+    <div class="bg-gray-50 p-4 rounded-lg shadow-inner">
+      <h3 class="text-xl font-semibold mb-2 text-blue-600">Simulation Chart</h3>
+      <canvas id="chart" width="900" height="400"></canvas>
+    </div>
+
+    <!-- Log -->
+    <div>
+      <h3 class="text-xl font-semibold mb-2 text-blue-600">Log / Messages</h3>
+      <div id="log" class="bg-gray-800 text-green-200 p-3 rounded-lg font-mono text-sm h-48 overflow-y-auto">
+        Enter at least one row in the table or load a w.txt file, then press "Run Simulation".
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="simulazione.js"></script>
+</body>
+</html>
