@@ -4,17 +4,69 @@ const downloadBtn = document.getElementById('downloadBtn');
 const wTableBody = document.getElementById('wTableBody');
 const addRowBtn = document.getElementById('addRowBtn');
 
-// Nuovi elementi per la visualizzazione del pendolo
-const pendulumCanvas = document.getElementById('pendulumCanvas');
-const pendulumCtx = pendulumCanvas.getContext('2d');
-let animationId = null; // Per gestire l'animazione del pendolo
-let pendulumAnimationData = []; // Dati per l'animazione del pendolo
-let currentPendulumLength = 0; // Lunghezza del pendolo per il disegno
+// Nuove variabili per la simulazione del pendolo
+const simulationCanvas = document.getElementById('pendulumCanvas');
+const simulationCtx = simulationCanvas.getContext('2d');
+let pendulumStates = []; // Array per memorizzare gli stati (th1, th2)
+let animationFrameId = null; // ID per requestAnimationFrame
+let currentAnimationFrame = 0; // Indice dello stato corrente nell'animazione
+const animationSpeedFactor = 100; // Quanti passi di simulazione per frame di animazione (per controllare la velocità)
 
 function log(msg) {
   logEl.textContent += '\n' + msg;
   logEl.scrollTop = logEl.scrollHeight;
 }
+
+// Funzione per disegnare il doppio pendolo
+function drawPendulum(th1, th2, l, canvas, ctx) {
+    const width = canvas.width;
+    const height = canvas.height;
+    const scaleFactor = 20; // Fattore di scala: 1 metro = 20 pixel
+    const originX = width / 2;
+    const originY = 50; // Punto di ancoraggio dall'alto
+
+    ctx.clearRect(0, 0, width, height); // Pulisce il canvas
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#333';
+
+    // Disegna il punto di ancoraggio
+    ctx.beginPath();
+    ctx.arc(originX, originY, 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#666';
+    ctx.fill();
+
+    // Primo pendolo (massa 1 e asta)
+    const x1 = originX + l * Math.sin(th1) * scaleFactor;
+    const y1 = originY + l * Math.cos(th1) * scaleFactor;
+
+    ctx.beginPath();
+    ctx.moveTo(originX, originY);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x1, y1, 8, 0, Math.PI * 2); // Massa 1
+    ctx.fillStyle = 'blue';
+    ctx.fill();
+    ctx.stroke();
+
+    // Secondo pendolo (massa 2 e asta)
+    const x2 = x1 + l * Math.sin(th2) * scaleFactor;
+    const y2 = y1 + l * Math.cos(th2) * scaleFactor;
+
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x2, y2, 8, 0, Math.PI * 2); // Massa 2
+    ctx.fillStyle = 'red';
+    ctx.fill();
+    ctx.stroke();
+}
+
+// Disegna il pendolo iniziale (verticale) all'avvio
+drawPendulum(0, 0, Number(document.getElementById('lInput').value), simulationCanvas, simulationCtx);
+
 
 // Initial data (original values)
 const initialData = [
@@ -56,17 +108,12 @@ addRowBtn.addEventListener('click', () => addRow());
 document.getElementById('runBtn').addEventListener('click', startSimulation);
 
 async function startSimulation() {
-  logEl.textContent = ''; // Pulisce il log all'inizio di una nuova simulazione
-  if (animationId) {
-    cancelAnimationFrame(animationId); // Ferma l'animazione precedente se in corso
-  }
-  pendulumCtx.clearRect(0, 0, pendulumCanvas.width, pendulumCanvas.height); // Pulisce il canvas del pendolo
-
+  logEl.textContent = '';
   let w_v = [];
 
   for (let row of wTableBody.rows) {
     const tau = Number(row.cells[0].querySelector('input').value);
-    const w = Number(row.cells[1].querySelector('input').value) * 2 * Math.PI; // Converti Hz in rad/s
+    const w = Number(row.cells[1].querySelector('input').value) * 2 * Math.PI;
     const phi = Number(row.cells[2].querySelector('input').value);
     const A = Number(row.cells[3].querySelector('input').value);
     if (!isNaN(tau) && !isNaN(w) && !isNaN(phi) && !isNaN(A)) {
@@ -92,62 +139,48 @@ async function startSimulation() {
   const l = Number(document.getElementById('lInput').value);
   const dt = deltat / n;
 
-  currentPendulumLength = l; // Salva la lunghezza per il disegno
-
   log(`Simulation started with n=${n}, g=${g}, Δt=${deltat}, l=${l}`);
 
+  // Cancella l'animazione precedente se in esecuzione
+  if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+  }
+  pendulumStates = []; // Resetta gli stati per la nuova simulazione
+
   let t0=0.0, v1=0.0, v2=0.0, th1=0.0, th2=0.0;
-  // Calcolo della velocità iniziale per il primo pendolo
   for (let i=0;i<w_v.length;i++) v1 += -w_v[i].w*w_v[i].A*Math.cos(w_v[i].phi)/l;
 
   const dati=[], rumore=[];
-  pendulumAnimationData = []; // Reset dei dati per l'animazione
-
   for (let step=0; step<n; step++) {
-    let ap=0; // Accelerazione della base
+    let ap=0;
     for (let j=0;j<w_v.length;j++){
       const p=w_v[j], expTerm=Math.exp(-t0/p.tau);
-      // Calcolo dell'accelerazione della base (derivata seconda della posizione)
       ap += p.A*expTerm*((p.w*p.w - 1/(p.tau*p.tau))*Math.sin(p.w*t0+p.phi)+2*(p.w/p.tau)*Math.cos(p.w*t0+p.phi));
     }
 
     const delta=th1-th2, cos1=Math.cos(th1), cos2=Math.cos(th2);
     const sin_delta=Math.sin(delta), cos_delta=Math.cos(delta), sin1=Math.sin(th1), sin2=Math.sin(th2);
 
-    // Posizione del mirror (punta del secondo pendolo)
-    let pt=l*sin1+l*sin2;
-    // Posizione della base (rumore)
-    let sa=0;
+    let pt=l*sin1+l*sin2, sa=0;
     for (let j=0;j<w_v.length;j++){
       const p=w_v[j], term=Math.exp(-t0/p.tau)*p.A*Math.sin(p.w*t0+p.phi);
-      pt += term; // Aggiungi il rumore alla posizione del mirror
-      sa += term; // Solo il rumore per il grafico del rumore
+      pt += term; sa += term;
     }
 
-    dati.push({x:t0,y:pt});
-    rumore.push({x:t0,y:sa});
-    pendulumAnimationData.push({th1: th1, th2: th2}); // Salva gli angoli per l'animazione
+    dati.push({x:t0,y:pt}); rumore.push({x:t0,y:sa});
+    pendulumStates.push({ th1, th2 }); // Memorizza gli angoli per l'animazione
 
-    // Equazioni del moto per il doppio pendolo (semplificate per l'accelerazione della base)
-    // Queste sono le equazioni differenziali che descrivono il moto
-    const den = 2 - cos_delta * cos_delta; // Denominatore comune per le accelerazioni angolari
-    const num1 = -g * (2 * sin1 - sin_delta * cos2) - l * (v1 * v1 * sin_delta + v2 * v2 * sin_delta * cos_delta) + ap * (2 * cos1 - cos_delta * cos2);
-    const num2 = -g * (2 * sin2 - sin_delta * cos1) + l * (v1 * v1 * sin_delta * cos_delta + v2 * v2 * sin_delta) + ap * (2 * cos2 - cos_delta * cos1);
+    const theta_2_dp=(v2*v1*sin_delta + (ap/l)*cos2 - (g/l)*sin2 + v1*(v1-v2)*sin_delta - (cos_delta/2)*(2*(ap/l)*cos1 - 2*(g/l)*sin1 - v1*v2*sin_delta + v2*(v1-v2)*sin_delta))/(1-cos_delta*cos_delta*0.5);
+    const theta_1_dp=0.5*(2*(ap/l)*cos1 - 2*(g/l)*sin1 - v1*v2*sin_delta - theta_2_dp*cos_delta + v2*(v1-v2)*sin_delta);
 
-    const theta_1_dp = (num1 - num2 * cos_delta) / (l * den);
-    const theta_2_dp = (num2 - num1 * cos_delta) / (l * den);
-
-    v1+=theta_1_dp*dt; // Aggiorna velocità angolare 1
-    v2+=theta_2_dp*dt; // Aggiorna velocità angolare 2
-    th1+=v1*dt;       // Aggiorna angolo 1
-    th2+=v2*dt;       // Aggiorna angolo 2
-    t0+=dt;           // Aggiorna tempo
+    v1+=theta_1_dp*dt; v2+=theta_2_dp*dt; th1+=v1*dt; th2+=v2*dt; t0+=dt;
   }
 
   log("Simulation completed.");
   drawChart(dati, rumore);
   prepareDownload(dati, rumore);
-  startPendulumAnimation(pendulumAnimationData, currentPendulumLength, deltat); // Avvia l'animazione
+  startPendulumAnimation(l); // Avvia l'animazione del pendolo
 }
 
 function drawChart(dati, rumore){
@@ -175,99 +208,20 @@ function prepareDownload(dati, rumore){
   };
 }
 
-// --- Funzioni per la visualizzazione del pendolo ---
+// Funzione per avviare l'animazione del pendolo
+function startPendulumAnimation(l) {
+    if (pendulumStates.length === 0) return;
 
-function drawPendulum(th1, th2, l) {
-  pendulumCtx.clearRect(0, 0, pendulumCanvas.width, pendulumCanvas.height); // Pulisci il canvas
+    currentAnimationFrame = 0; // Inizia dall'inizio degli stati
 
-  const originX = pendulumCanvas.width / 2;
-  const originY = pendulumCanvas.height / 4; // Punto di sospensione
+    function animate() {
+        // Avanza di 'animationSpeedFactor' passi per frame per controllare la velocità
+        currentAnimationFrame = (currentAnimationFrame + animationSpeedFactor) % pendulumStates.length;
 
-  // Scala per adattare la lunghezza del pendolo al canvas
-  // Assumiamo che la lunghezza massima del pendolo (2*l) non superi metà dell'altezza del canvas
-  const scale = Math.min(pendulumCanvas.width, pendulumCanvas.height) / (2 * l + 2) ; // +2 per un po' di margine
+        const state = pendulumStates[currentAnimationFrame];
+        drawPendulum(state.th1, state.th2, l, simulationCanvas, simulationCtx);
 
-  // Coordinate del primo punto (massa 1)
-  const x1 = originX + l * scale * Math.sin(th1);
-  const y1 = originY + l * scale * Math.cos(th1);
-
-  // Coordinate del secondo punto (massa 2)
-  const x2 = x1 + l * scale * Math.sin(th2);
-  const y2 = y1 + l * scale * Math.cos(th2);
-
-  // Disegna il punto di sospensione
-  pendulumCtx.beginPath();
-  pendulumCtx.arc(originX, originY, 3, 0, Math.PI * 2);
-  pendulumCtx.fillStyle = 'black';
-  pendulumCtx.fill();
-
-  // Disegna il primo braccio del pendolo
-  pendulumCtx.beginPath();
-  pendulumCtx.moveTo(originX, originY);
-  pendulumCtx.lineTo(x1, y1);
-  pendulumCtx.strokeStyle = 'gray';
-  pendulumCtx.lineWidth = 2;
-  pendulumCtx.stroke();
-
-  // Disegna la prima massa
-  pendulumCtx.beginPath();
-  pendulumCtx.arc(x1, y1, 8, 0, Math.PI * 2);
-  pendulumCtx.fillStyle = 'blue';
-  pendulumCtx.fill();
-  pendulumCtx.strokeStyle = 'black';
-  pendulumCtx.stroke();
-
-  // Disegna il secondo braccio del pendolo
-  pendulumCtx.beginPath();
-  pendulumCtx.moveTo(x1, y1);
-  pendulumCtx.lineTo(x2, y2);
-  pendulumCtx.strokeStyle = 'gray';
-  pendulumCtx.lineWidth = 2;
-  pendulumCtx.stroke();
-
-  // Disegna la seconda massa (mirror)
-  pendulumCtx.beginPath();
-  pendulumCtx.arc(x2, y2, 8, 0, Math.PI * 2);
-  pendulumCtx.fillStyle = 'red';
-  pendulumCtx.fill();
-  pendulumCtx.strokeStyle = 'black';
-  pendulumCtx.stroke();
-}
-
-let animationFrameIndex = 0;
-let animationSpeedFactor = 1; // Quanti step di simulazione per frame di animazione
-
-function startPendulumAnimation(data, l_val, totalSimulationTime) {
-  if (animationId) {
-    cancelAnimationFrame(animationId); // Ferma qualsiasi animazione precedente
-  }
-
-  pendulumAnimationData = data;
-  currentPendulumLength = l_val;
-  animationFrameIndex = 0;
-
-  // Calcola un fattore di velocità per far durare l'animazione un tempo ragionevole (es. 10-20 secondi)
-  // Se la simulazione ha molti step, salteremo più frame per mantenere la durata
-  const targetAnimationDurationSeconds = 15; // Durata desiderata dell'animazione in secondi
-  const totalFramesInSimulation = data.length;
-  const framesPerSecond = 60; // FPS del browser
-  const requiredFramesForTargetDuration = targetAnimationDurationSeconds * framesPerSecond;
-
-  animationSpeedFactor = Math.max(1, Math.floor(totalFramesInSimulation / requiredFramesForTargetDuration));
-  log(`Starting pendulum animation. Total simulation steps: ${totalFramesInSimulation}. Animation speed factor: ${animationSpeedFactor}`);
-
-  animatePendulumFrame();
-}
-
-function animatePendulumFrame() {
-  if (animationFrameIndex < pendulumAnimationData.length) {
-    const frame = pendulumAnimationData[animationFrameIndex];
-    drawPendulum(frame.th1, frame.th2, currentPendulumLength);
-
-    animationFrameIndex += animationSpeedFactor; // Avanza di 'animationSpeedFactor' step
-    animationId = requestAnimationFrame(animatePendulumFrame);
-  } else {
-    log("Pendulum animation finished.");
-    animationId = null; // Resetta l'ID dell'animazione
-  }
+        animationFrameId = requestAnimationFrame(animate); // Richiede il prossimo frame
+    }
+    animationFrameId = requestAnimationFrame(animate); // Avvia l'animazione
 }
