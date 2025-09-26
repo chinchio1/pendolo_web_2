@@ -85,6 +85,14 @@ async function startSimulation() {
       const tau=Number(parts[0]), w=Number(parts[1])*2*Math.PI, phi=Number(parts[2]), A=Number(parts[3]);
       return {tau,w,phi,A};
     });
+    // Added feedback for file loading
+    if (w_v.length > 0) {
+        log(`Loaded ${w_v.length} noise components from file.`);
+    } else {
+        log("No valid noise components found in the file.");
+        alert("No valid noise components found in the file!");
+        return;
+    }
   }
 
   const n = Number(document.getElementById('nSteps').value) || 100000;
@@ -112,7 +120,7 @@ async function startSimulation() {
       const sin_wt_phi = Math.sin(p.w*t0+p.phi);
       const cos_wt_phi = Math.cos(p.w*t0+p.phi);
 
-      // Base displacement
+      // Base displacement (horizontal)
       sa += p.A * expTerm * sin_wt_phi;
 
       // Base acceleration (second derivative of displacement)
@@ -126,11 +134,11 @@ async function startSimulation() {
     const delta=th1-th2, cos1=Math.cos(th1), cos2=Math.cos(th2);
     const sin_delta=Math.sin(delta), cos_delta=Math.cos(delta), sin1=Math.sin(th1), sin2=Math.sin(th2);
 
-    // pt is the absolute position of the second mass (mirror)
-    // It's the sum of the base displacement (sa) and the relative position of the second mass
-    // relative position of first mass: l*sin1
-    // relative position of second mass to first: l*sin2
-    // So, absolute position of second mass = sa + l*sin1 + l*sin2
+    // pt is the absolute horizontal position of the second mass (mirror)
+    // It's the sum of the base displacement (sa) and the relative horizontal position of the second mass
+    // relative horizontal position of first mass: l*sin1
+    // relative horizontal position of second mass to first: l*sin2
+    // So, absolute horizontal position of second mass = sa + l*sin1 + l*sin2
     let pt = sa + l*sin1 + l*sin2;
 
     dati.push({x:t0, y:pt, th1:th1, th2:th2}); // Store angles for visualization
@@ -166,10 +174,10 @@ function drawChart(dati, rumore){
   chart=new Chart(ctx,{
     type:'line',
     data:{datasets:[
-      {label:'Mirror Position', data:dati, parsing:{xAxisKey:'x',yAxisKey:'y'}, borderColor:'blue', borderWidth:1, pointRadius:0},
-      {label:'Base Noise', data:rumore, parsing:{xAxisKey:'x',yAxisKey:'y'}, borderColor:'red', borderWidth:1, pointRadius:0}
+      {label:'Mirror Position (Horizontal)', data:dati, parsing:{xAxisKey:'x',yAxisKey:'y'}, borderColor:'blue', borderWidth:1, pointRadius:0},
+      {label:'Base Noise (Horizontal)', data:rumore, parsing:{xAxisKey:'x',yAxisKey:'y'}, borderColor:'red', borderWidth:1, pointRadius:0}
     ]},
-    options:{responsive:true, animation:false, scales:{x:{type:'linear', title:{display:true,text:'Time (s)'}}, y:{title:{display:true,text:'Amplitude (m)'}}}}
+    options:{responsive:true, animation:false, scales:{x:{type:'linear', title:{display:true,text:'Time (s)'}}, y:{title:{display:true,text:'Horizontal Displacement (m)'}}}}
   });
 }
 
@@ -225,13 +233,14 @@ function animatePendulum() {
 }
 
 function drawPendulum(th1, th2, l_meters) {
-  const scale = 30; // Pixels per meter. Adjust as needed for canvas size.
+  const scale = 15; // Pixels per meter. Adjusted to fit 7.5m length (total 15m) on 400px canvas.
   const l_pixels = l_meters * scale;
 
   pendulumCtx.clearRect(0, 0, pendulumCanvas.width, pendulumCanvas.height);
   pendulumCtx.save();
-  // Translate origin to the top center of the canvas, slightly down to allow for full swing
-  pendulumCtx.translate(pendulumCanvas.width / 2, pendulumCanvas.height / 4); 
+  // Translate origin to the top center of the canvas, adjusted for visibility.
+  // (height / 3) gives ~133px for 400px canvas. Max Y for mass 2 will be 133 + 2*112.5 = 358px, which fits.
+  pendulumCtx.translate(pendulumCanvas.width / 2, pendulumCanvas.height / 3); 
 
   // Draw first pendulum arm and mass
   // Angles are measured from the vertical, positive clockwise
@@ -253,12 +262,14 @@ function drawPendulum(th1, th2, l_meters) {
   pendulumCtx.stroke();
 
   // Draw second pendulum arm and mass
-  // Angle th2 is also measured from the vertical, but relative to the first mass's position
+  // th1 and th2 are absolute angles from the vertical.
+  // x1, y1 are absolute coordinates of mass 1.
+  // The components of the second arm are added to mass 1's position.
   const x2 = x1 + l_pixels * Math.sin(th2);
   const y2 = y1 + l_pixels * Math.cos(th2);
 
   pendulumCtx.beginPath();
-  pendulumCtx.moveTo(x1, y1); // Pivot point for second pendulum
+  pendulumCtx.moveTo(x1, y1); // Pivot point for second pendulum is mass 1
   pendulumCtx.lineTo(x2, y2);
   pendulumCtx.strokeStyle = 'black';
   pendulumCtx.lineWidth = 2;
