@@ -40,6 +40,12 @@
         <input id="lInput" type="number" value="7.5" step="1.0" class="w-28 p-2 border rounded-lg"/>
       </label>
 
+      <label class="flex items-center gap-2">
+        <span>Animation Speed:</span>
+        <input id="animationSpeedInput" type="number" value="100" min="1" step="10"
+               class="w-28 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" />
+      </label>
+
       <button id="runBtn"
               class="bg-blue-500 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-600 transition">
         Run Simulation
@@ -80,8 +86,8 @@
     </div>
 
     <!-- Pendulum Visualization -->
-    <div class="bg-gray-50 p-4 rounded-lg shadow-inner mt-6">
-      <h3 class="text-xl font-semibold mb-2 text-blue-600">Pendulum Visualization</h3>
+    <div class="bg-gray-50 p-4 rounded-lg shadow-inner">
+      <h3 class="text-xl font-semibold mb-2">Pendulum Visualization</h3>
       <canvas id="pendulumCanvas" width="400" height="400" class="bg-white border border-gray-300 mx-auto block"></canvas>
     </div>
 
