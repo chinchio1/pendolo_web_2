@@ -4,16 +4,16 @@ const downloadBtn = document.getElementById('downloadBtn');
 const wTableBody = document.getElementById('wTableBody');
 const addRowBtn = document.getElementById('addRowBtn');
 
-// Pendulum Visualization elements
+// Nuovi elementi per l'animazione del pendolo
 const pendulumCanvas = document.getElementById('pendulumCanvas');
 const pendulumCtx = pendulumCanvas.getContext('2d');
-const visualizePendulumCheckbox = document.getElementById('visualizePendulum');
-const animationSpeedInput = document.getElementById('animationSpeed');
 
-let animationFrameId = null;
-let currentAnimationFrame = 0;
-let animationData = [];
-let animationPendulumLength = 0;
+let animationId = null; // Per memorizzare l'ID di requestAnimationFrame
+let animationFramesData = []; // Conterrà gli stati del pendolo per l'animazione
+let animationL = 0; // Lunghezza del pendolo per l'animazione
+let startTime = null; // Per tracciare il tempo di inizio dell'animazione
+
+const ANIMATION_DURATION_SECONDS = 10; // Durata desiderata dell'animazione in tempo reale
 
 function log(msg) {
   logEl.textContent += '\n' + msg;
@@ -60,9 +60,7 @@ addRowBtn.addEventListener('click', () => addRow());
 document.getElementById('runBtn').addEventListener('click', startSimulation);
 
 async function startSimulation() {
-  logEl.textContent = ''; // Clear log
-  log("Starting simulation...");
-
+  logEl.textContent = '';
   let w_v = [];
 
   for (let row of wTableBody.rows) {
@@ -85,87 +83,63 @@ async function startSimulation() {
       const tau=Number(parts[0]), w=Number(parts[1])*2*Math.PI, phi=Number(parts[2]), A=Number(parts[3]);
       return {tau,w,phi,A};
     });
-    // Added feedback for file loading
-    if (w_v.length > 0) {
-        log(`Loaded ${w_v.length} noise components from file.`);
-    } else {
-        log("No valid noise components found in the file.");
-        alert("No valid noise components found in the file!");
-        return;
-    }
   }
 
   const n = Number(document.getElementById('nSteps').value) || 100000;
   const g = Number(document.getElementById('gInput').value);
   const deltat = Number(document.getElementById('deltatInput').value);
-  const l = Number(document.getElementById('lInput').value); // Pendulum length in meters
+  const l = Number(document.getElementById('lInput').value);
   const dt = deltat / n;
 
-  log(`Simulation parameters: n=${n}, g=${g}, Δt=${deltat}, l=${l}m`);
-  log(`Number of noise components: ${w_v.length}`);
+  log(`Simulation started with n=${n}, g=${g}, Δt=${deltat}, l=${l}`);
 
-  let t0=0.0, v1=0.0, v2=0.0, th1=0.0, th2=0.0; // Initial conditions: angles and velocities are zero
-  // Calculate initial velocity for the first pendulum based on noise
-  for (let i=0;i<w_v.length;i++) {
-    v1 += -w_v[i].w * w_v[i].A * Math.cos(w_v[i].phi) / l;
-  }
+  let t0=0.0, v1=0.0, v2=0.0, th1=0.0, th2=0.0;
+  // Inizializzazione della velocità angolare v1 basata sui parametri di rumore
+  for (let i=0;i<w_v.length;i++) v1 += -w_v[i].w*w_v[i].A*Math.cos(w_v[i].phi)/l;
 
-  const dati=[], rumore=[]; // dati will now store th1, th2 as well
+  const dati=[], rumore=[];
+  let animationFrames = []; // Array per memorizzare gli stati del pendolo per l'animazione
+
   for (let step=0; step<n; step++) {
-    let ap=0; // Acceleration of the base (noise)
-    let sa=0; // Displacement of the base (noise)
+    let ap=0; // Accelerazione esterna
     for (let j=0;j<w_v.length;j++){
-      const p=w_v[j];
-      const expTerm=Math.exp(-t0/p.tau);
-      const sin_wt_phi = Math.sin(p.w*t0+p.phi);
-      const cos_wt_phi = Math.cos(p.w*t0+p.phi);
-
-      // Base displacement (horizontal)
-      sa += p.A * expTerm * sin_wt_phi;
-
-      // Base acceleration (second derivative of displacement)
-      // NOTE: The formula for 'ap' here seems to be the negative of a standard second derivative
-      // of 'sa' if 'sa' is defined as A * exp(-t/tau) * sin(w*t + phi).
-      // However, as per user's instruction "I conti del codice devono essere corretti",
-      // I am keeping the original formula for 'ap' as provided in the initial code.
-      ap += p.A * expTerm * ((p.w*p.w - 1/(p.tau*p.tau)) * sin_wt_phi + 2 * (p.w/p.tau) * cos_wt_phi);
+      const p=w_v[j], expTerm=Math.exp(-t0/p.tau);
+      ap += p.A*expTerm*((p.w*p.w - 1/(p.tau*p.tau))*Math.sin(p.w*t0+p.phi)+2*(p.w/p.tau)*Math.cos(p.w*t0+p.phi));
     }
 
     const delta=th1-th2, cos1=Math.cos(th1), cos2=Math.cos(th2);
     const sin_delta=Math.sin(delta), cos_delta=Math.cos(delta), sin1=Math.sin(th1), sin2=Math.sin(th2);
 
-    // pt is the absolute horizontal position of the second mass (mirror)
-    // It's the sum of the base displacement (sa) and the relative horizontal position of the second mass
-    // relative horizontal position of first mass: l*sin1
-    // relative horizontal position of second mass to first: l*sin2
-    // So, absolute horizontal position of second mass = sa + l*sin1 + l*sin2
-    let pt = sa + l*sin1 + l*sin2;
+    let pt=l*sin1+l*sin2, sa=0; // pt: posizione orizzontale del secondo mass, sa: somma del rumore
+    for (let j=0;j<w_v.length;j++){
+      const p=w_v[j], term=Math.exp(-t0/p.tau)*p.A*Math.sin(p.w*t0+p.phi);
+      pt += term; sa += term;
+    }
 
-    dati.push({x:t0, y:pt, th1:th1, th2:th2}); // Store angles for visualization
-    rumore.push({x:t0, y:sa}); // Store base noise displacement
+    dati.push({x:t0,y:pt}); rumore.push({x:t0,y:sa});
+    animationFrames.push({ th1: th1, th2: th2 }); // Memorizza lo stato per l'animazione
 
-    // Equations for angular accelerations (theta_1_dp, theta_2_dp)
-    // These are complex and specific to the double pendulum with moving base.
-    // Assuming they are correct as per the original code.
-    const denom = (1 - cos_delta * cos_delta * 0.5);
-    const term1_num = v2*v1*sin_delta + (ap/l)*cos2 - (g/l)*sin2 + v1*(v1-v2)*sin_delta;
-    const term2_num = (cos_delta/2)*(2*(ap/l)*cos1 - 2*(g/l)*sin1 - v1*v2*sin_delta + v2*(v1-v2)*sin_delta);
-    const theta_2_dp = (term1_num - term2_num) / denom;
+    // Calcoli originali della fisica per il doppio pendolo
+    // Questi calcoli sono stati mantenuti come forniti, assumendo la loro correttezza.
+    const theta_2_dp=(v2*v1*sin_delta + (ap/l)*cos2 - (g/l)*sin2 + v1*(v1-v2)*sin_delta - (cos_delta/2)*(2*(ap/l)*cos1 - 2*(g/l)*sin1 - v1*v2*sin_delta + v2*(v1-v2)*sin_delta))/(1-cos_delta*cos_delta*0.5);
+    const theta_1_dp=0.5*(2*(ap/l)*cos1 - 2*(g/l)*sin1 - v1*v2*sin_delta - theta_2_dp*cos_delta + v2*(v1-v2)*sin_delta);
 
-    const theta_1_dp = 0.5 * (2*(ap/l)*cos1 - 2*(g/l)*sin1 - v1*v2*sin_delta - theta_2_dp*cos_delta + v2*(v1-v2)*sin_delta);
-
-    // Update velocities and angles using Euler integration
-    v1 += theta_1_dp * dt;
-    v2 += theta_2_dp * dt;
-    th1 += v1 * dt;
-    th2 += v2 * dt;
-    t0 += dt;
+    v1+=theta_1_dp*dt; v2+=theta_2_dp*dt; th1+=v1*dt; th2+=v2*dt; t0+=dt;
   }
 
   log("Simulation completed.");
   drawChart(dati, rumore);
   prepareDownload(dati, rumore);
-  startPendulumAnimation(dati, l); // Start the visual animation
+
+  // Prepara e avvia l'animazione
+  animationFramesData = animationFrames; // Memorizza i frame generati
+  animationL = l; // Memorizza la lunghezza del pendolo utilizzata
+  if (animationId) {
+      cancelAnimationFrame(animationId); // Ferma qualsiasi animazione precedente
+  }
+  startTime = null; // Resetta il tempo di inizio per una nuova animazione
+  log("Starting pendulum animation...");
+  animationId = requestAnimationFrame(animatePendulum);
 }
 
 function drawChart(dati, rumore){
@@ -174,113 +148,111 @@ function drawChart(dati, rumore){
   chart=new Chart(ctx,{
     type:'line',
     data:{datasets:[
-      {label:'Mirror Position (Horizontal)', data:dati, parsing:{xAxisKey:'x',yAxisKey:'y'}, borderColor:'blue', borderWidth:1, pointRadius:0},
-      {label:'Base Noise (Horizontal)', data:rumore, parsing:{xAxisKey:'x',yAxisKey:'y'}, borderColor:'red', borderWidth:1, pointRadius:0}
+      {label:'Mirror Position', data:dati, parsing:{xAxisKey:'x',yAxisKey:'y'}, borderColor:'blue', borderWidth:1, pointRadius:0},
+      {label:'Base Noise', data:rumore, parsing:{xAxisKey:'x',yAxisKey:'y'}, borderColor:'red', borderWidth:1, pointRadius:0}
     ]},
-    options:{responsive:true, animation:false, scales:{x:{type:'linear', title:{display:true,text:'Time (s)'}}, y:{title:{display:true,text:'Horizontal Displacement (m)'}}}}
+    options:{responsive:true, animation:false, scales:{x:{type:'linear', title:{display:true,text:'Time (s)'}}, y:{title:{display:true,text:'Amplitude (m)'}}}}
   });
 }
 
 function prepareDownload(dati, rumore){
-  // dati.txt will contain time and mirror position
-  const datiTxt=dati.map(p=>`${p.x}\t${p.y}`).join('\n');
-  const rumoreTxt=rumore.map(p=>`${p.x}\t${p.y}`).join('\n');
-  
-  const blob1=new Blob([datiTxt],{type:'text/plain'});
-  const blob2=new Blob([rumoreTxt],{type:'text/plain'});
-  
+  const datiTxt=dati.map(p=>`${p.x} ${p.y}`).join('\n');
+  const rumoreTxt=rumore.map(p=>`${p.x} ${p.y}`).join('\n');
+  const blob1=new Blob([datiTxt],{type:'text/plain'}), blob2=new Blob([rumoreTxt],{type:'text/plain'});
   downloadBtn.disabled=false;
   downloadBtn.onclick=()=>{
-    const a1=document.createElement('a'); a1.href=URL.createObjectURL(blob1); a1.download='dati_mirror_position.txt'; document.body.appendChild(a1); a1.click(); a1.remove();
-    const a2=document.createElement('a'); a2.href=URL.createObjectURL(blob2); a2.download='rumore_base_displacement.txt'; document.body.appendChild(a2); a2.click(); a2.remove();
-    log("Download started for dati_mirror_position.txt and rumore_base_displacement.txt");
+    const a1=document.createElement('a'); a1.href=URL.createObjectURL(blob1); a1.download='dati.txt'; document.body.appendChild(a1); a1.click(); a1.remove();
+    const a2=document.createElement('a'); a2.href=URL.createObjectURL(blob2); a2.download='rumore_base.txt'; document.body.appendChild(a2); a2.click(); a2.remove();
+    log("Download started for dati.txt and rumore_base.txt");
   };
 }
 
-// --- Pendulum Visualization Functions ---
+// --- Funzioni per l'animazione del pendolo ---
 
-function startPendulumAnimation(data, l_meters) {
-  if (!visualizePendulumCheckbox.checked) {
-    log("Pendulum visualization is disabled.");
-    return;
-  }
+function drawPendulum(ctx, l, th1, th2, canvasWidth, canvasHeight) {
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-  animationData = data;
-  animationPendulumLength = l_meters;
-  currentAnimationFrame = 0;
+    // Centro del canvas per il punto di pivot
+    const originX = canvasWidth / 2;
+    const originY = canvasHeight / 4; // Inizia un po' più in basso rispetto all'alto
 
-  if (animationFrameId) {
-    cancelAnimationFrame(animationFrameId);
-  }
+    // Fattore di scala per rendere il pendolo visibile
+    // Calcola una scala dinamica basata sull'altezza del canvas e la lunghezza massima del pendolo (2*l)
+    const maxPendulumHeight = 2 * l; // Estensione verticale massima del pendolo
+    const availableHeight = canvasHeight - originY - 20; // Altezza disponibile dal pivot al fondo, con un po' di padding
+    const scale = availableHeight / maxPendulumHeight; // pixel per metro
 
-  log("Starting pendulum animation...");
-  animatePendulum();
+    const L1 = l * scale;
+    const L2 = l * scale;
+
+    // Coordinate della prima massa (m1)
+    // Gli angoli sono misurati dalla verticale, positivi in senso orario.
+    const x1 = originX + L1 * Math.sin(th1);
+    const y1 = originY + L1 * Math.cos(th1);
+
+    // Coordinate della seconda massa (m2)
+    const x2 = x1 + L2 * Math.sin(th2);
+    const y2 = y1 + L2 * Math.cos(th2);
+
+    // Disegna il pivot
+    ctx.beginPath();
+    ctx.arc(originX, originY, 5, 0, 2 * Math.PI);
+    ctx.fillStyle = 'black';
+    ctx.fill();
+
+    // Disegna la prima asta
+    ctx.beginPath();
+    ctx.moveTo(originX, originY);
+    ctx.lineTo(x1, y1);
+    ctx.strokeStyle = 'gray';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Disegna la prima massa
+    ctx.beginPath();
+    ctx.arc(x1, y1, 10, 0, 2 * Math.PI);
+    ctx.fillStyle = 'blue';
+    ctx.fill();
+    ctx.strokeStyle = 'black';
+    ctx.stroke();
+
+    // Disegna la seconda asta
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.strokeStyle = 'gray';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Disegna la seconda massa
+    ctx.beginPath();
+    ctx.arc(x2, y2, 10, 0, 2 * Math.PI);
+    ctx.fillStyle = 'red';
+    ctx.fill();
+    ctx.strokeStyle = 'black';
+    ctx.stroke();
 }
 
-function animatePendulum() {
-  if (currentAnimationFrame < animationData.length) {
-    const frame = animationData[currentAnimationFrame];
-    drawPendulum(frame.th1, frame.th2, animationPendulumLength);
-    
-    const animationSpeedFactor = Number(animationSpeedInput.value) || 1;
-    currentAnimationFrame += animationSpeedFactor; 
-    
-    animationFrameId = requestAnimationFrame(animatePendulum);
-  } else {
-    log("Pendulum animation finished.");
-    animationFrameId = null;
-  }
-}
+function animatePendulum(currentTime) {
+    if (!startTime) startTime = currentTime;
+    const elapsed = (currentTime - startTime) / 1000; // tempo trascorso in secondi
 
-function drawPendulum(th1, th2, l_meters) {
-  const scale = 15; // Pixels per meter. Adjusted to fit 7.5m length (total 15m) on 400px canvas.
-  const l_pixels = l_meters * scale;
+    if (elapsed < ANIMATION_DURATION_SECONDS) {
+        const progress = elapsed / ANIMATION_DURATION_SECONDS; // progresso da 0 a 1
+        const frameIndex = Math.floor(progress * animationFramesData.length);
 
-  pendulumCtx.clearRect(0, 0, pendulumCanvas.width, pendulumCanvas.height);
-  pendulumCtx.save();
-  // Translate origin to the top center of the canvas, adjusted for visibility.
-  // (height / 3) gives ~133px for 400px canvas. Max Y for mass 2 will be 133 + 2*112.5 = 358px, which fits.
-  pendulumCtx.translate(pendulumCanvas.width / 2, pendulumCanvas.height / 3); 
-
-  // Draw first pendulum arm and mass
-  // Angles are measured from the vertical, positive clockwise
-  const x1 = l_pixels * Math.sin(th1);
-  const y1 = l_pixels * Math.cos(th1);
-
-  pendulumCtx.beginPath();
-  pendulumCtx.moveTo(0, 0); // Pivot point
-  pendulumCtx.lineTo(x1, y1);
-  pendulumCtx.strokeStyle = 'black';
-  pendulumCtx.lineWidth = 2;
-  pendulumCtx.stroke();
-
-  pendulumCtx.beginPath();
-  pendulumCtx.arc(x1, y1, 10, 0, Math.PI * 2); // Mass 1 (radius 10 pixels)
-  pendulumCtx.fillStyle = 'blue';
-  pendulumCtx.fill();
-  pendulumCtx.strokeStyle = 'black';
-  pendulumCtx.stroke();
-
-  // Draw second pendulum arm and mass
-  // th1 and th2 are absolute angles from the vertical.
-  // x1, y1 are absolute coordinates of mass 1.
-  // The components of the second arm are added to mass 1's position.
-  const x2 = x1 + l_pixels * Math.sin(th2);
-  const y2 = y1 + l_pixels * Math.cos(th2);
-
-  pendulumCtx.beginPath();
-  pendulumCtx.moveTo(x1, y1); // Pivot point for second pendulum is mass 1
-  pendulumCtx.lineTo(x2, y2);
-  pendulumCtx.strokeStyle = 'black';
-  pendulumCtx.lineWidth = 2;
-  pendulumCtx.stroke();
-
-  pendulumCtx.beginPath();
-  pendulumCtx.arc(x2, y2, 10, 0, Math.PI * 2); // Mass 2 (mirror)
-  pendulumCtx.fillStyle = 'red';
-  pendulumCtx.fill();
-  pendulumCtx.strokeStyle = 'black';
-  pendulumCtx.stroke();
-
-  pendulumCtx.restore();
+        if (frameIndex < animationFramesData.length) {
+            const frame = animationFramesData[frameIndex];
+            drawPendulum(pendulumCtx, animationL, frame.th1, frame.th2, pendulumCanvas.width, pendulumCanvas.height);
+        }
+        animationId = requestAnimationFrame(animatePendulum);
+    } else {
+        // Assicurati che l'ultimo frame sia disegnato
+        const lastFrame = animationFramesData[animationFramesData.length - 1];
+        if (lastFrame) {
+            drawPendulum(pendulumCtx, animationL, lastFrame.th1, lastFrame.th2, pendulumCanvas.width, pendulumCanvas.height);
+        }
+        log("Animation finished.");
+        startTime = null; // Resetta per la prossima esecuzione
+    }
 }
