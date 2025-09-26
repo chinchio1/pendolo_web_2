@@ -77,6 +77,7 @@ async function startSimulation() {
     const fileInput = document.getElementById('fileInput').files[0];
     if (!fileInput) { alert("Please enter at least one row or load a file!"); return; }
     const text = await fileInput.text();
+    // CORREZIONE: Regex per la lettura del file modificata da /?\n/ a /\r?\n/
     const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l && !l.startsWith('#'));
     w_v = lines.map((line)=>{
       const parts=line.split(/\s+/);
@@ -92,8 +93,16 @@ async function startSimulation() {
   const dt = deltat / n;
 
   log(`Simulation started with n=${n}, g=${g}, Δt=${deltat}, l=${l}`);
+  // Suggerimento: I valori di A nell'initialData sono molto piccoli (1.0e-5).
+  // Per vedere un movimento più evidente del pendolo a causa del rumore,
+  // potresti voler aumentare questi valori (es. 1.0e-3 o 1.0e-2).
 
   let t0=0.0, v1=0.0, v2=0.0, th1=0.0, th2=0.0;
+  
+  // AGGIUNTA: Inizializza con una piccola deviazione angolare per garantire il movimento visibile.
+  // Senza questo, se il rumore è troppo piccolo, il pendolo potrebbe non muoversi affatto.
+  th1 = 0.1; // 0.1 radianti (circa 5.7 gradi)
+
   // Inizializzazione della velocità angolare v1 basata sui parametri di rumore
   for (let i=0;i<w_v.length;i++) v1 += -w_v[i].w*w_v[i].A*Math.cos(w_v[i].phi)/l;
 
@@ -139,6 +148,8 @@ async function startSimulation() {
   }
   startTime = null; // Resetta il tempo di inizio per una nuova animazione
   log("Starting pendulum animation...");
+  // Nota: Se 'nSteps' è molto basso, l'animazione potrebbe apparire meno fluida
+  // a causa del numero limitato di frame distribuiti su ANIMATION_DURATION_SECONDS.
   animationId = requestAnimationFrame(animatePendulum);
 }
 
