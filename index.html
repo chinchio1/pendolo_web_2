@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <title>Seismic Noise Dumping Simulation</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Stili aggiuntivi per il canvas se necessario */
+    #pendulumCanvas {
+      background-color: #f0f0f0; /* Un leggero sfondo per il canvas */
+      border: 1px solid #ccc;
+    }
+  </style>
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans p-6">
   <div class="max-w-5xl mx-auto bg-white shadow-lg rounded-xl p-6 space-y-6">
@@ -79,10 +86,10 @@
       <canvas id="chart" width="900" height="400"></canvas>
     </div>
 
-    <!-- Pendulum Simulation Canvas -->
-    <div class="bg-gray-50 p-4 rounded-lg shadow-inner mt-6">
-      <h3 class="text-xl font-semibold mb-2">Pendulum Simulation</h3>
-      <canvas id="pendulumCanvas" width="600" height="400" class="bg-white border border-gray-300 rounded mx-auto block"></canvas>
+    <!-- Canvas for Pendulum Animation -->
+    <div class="bg-gray-50 p-4 rounded-lg shadow-inner">
+      <h3 class="text-xl font-semibold mb-2 text-blue-600">Pendulum Animation</h3>
+      <canvas id="pendulumCanvas" width="600" height="400" class="bg-white border border-gray-300 mx-auto block"></canvas>
     </div>
 
     <!-- Log -->
