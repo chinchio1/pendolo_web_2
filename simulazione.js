@@ -191,10 +191,9 @@ function drawPendulum(th1, th2, noise_y) {
   const x1 = baseX + L * Math.sin(th1);
   const y1 = baseY + L * Math.cos(th1);
 
-  // Massa 2 (CORREZIONE QUI: th2 è l'angolo assoluto rispetto alla verticale)
-  // Le coordinate della seconda massa sono la somma vettoriale dei due bracci
-  const x2 = baseX + L * Math.sin(th1) + L * Math.sin(th2);
-  const y2 = baseY + L * Math.cos(th1) + L * Math.cos(th2);
+  // Massa 2
+  const x2 = x1 + L * Math.sin(th2);
+  const y2 = y1 + L * Math.cos(th2);
 
   // Disegna il punto di attacco (soffitto)
   ctx.beginPath();
@@ -223,8 +222,8 @@ function drawPendulum(th1, th2, noise_y) {
 
   // Disegna la seconda asta
   ctx.beginPath();
-  ctx.moveTo(x1, y1); // La seconda asta parte dalla prima massa
-  ctx.lineTo(x2, y2); // E arriva alla seconda massa
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
   ctx.lineWidth = 2;
   ctx.strokeStyle = 'gray';
   ctx.stroke();
